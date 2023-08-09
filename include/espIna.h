@@ -4,7 +4,6 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_timer.h"
-#include <cmath>
 #include "driver/i2c.h"
 
 // Reset bit for INA during power on
@@ -64,8 +63,8 @@
 #define INA_CURRENT_REG_ADDR 0x4
 #define INA_CALIB_REG_ADDR 0x5
 
-#define INA_I2C_SCL_IO 0x3
-#define INA_I2C_SDA_IO 0x4
+#define INA_I2C_SCL_IO 22
+#define INA_I2C_SDA_IO 21
 #define INA_I2C_TIMEOUT 1000
 #define INA_I2C_ADDR 0b1000000
 #define INA_I2C_MASTER_PORT 0

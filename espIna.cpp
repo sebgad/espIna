@@ -17,16 +17,17 @@ espIna::espIna(){
 
 esp_err_t espIna::_read_reg(uint8_t reg_addr, uint16_t * reg_value){
   uint8_t read_buffer[2];
-  i2c_master_write_read_device(INA_I2C_MASTER_PORT, INA_I2C_ADDR, &reg_addr, 1, read_buffer, 2, INA_I2C_TIMEOUT / portTICK_PERIOD_MS);
-  *reg_value = (read_buffer[1] << 8) + (read_buffer[0]);
+  ESP_ERROR_CHECK(i2c_master_write_read_device(INA_I2C_MASTER_PORT, INA_I2C_ADDR, &reg_addr, 1, read_buffer, sizeof(read_buffer), 
+                                               INA_I2C_TIMEOUT / portTICK_PERIOD_MS));
+  *reg_value = (read_buffer[0] << 8) + (read_buffer[1]);
   return ESP_OK;
 }
 
 esp_err_t espIna::_write_reg(uint8_t reg_addr, uint16_t reg_value){
   uint8_t write_buffer[3];
   write_buffer[0] = reg_addr;
-  write_buffer[1] = reg_value >> 8;
-  write_buffer[2] = reg_value & 0xFF; 
+  write_buffer[1] = (uint8_t)(reg_value & 0xFF); 
+  write_buffer[2] = (uint8_t)(reg_value >> 8);
 
   ESP_ERROR_CHECK(i2c_master_write_to_device(INA_I2C_MASTER_PORT, INA_I2C_ADDR, write_buffer, sizeof(write_buffer), INA_I2C_TIMEOUT / portTICK_PERIOD_MS));
   return ESP_OK;
@@ -34,9 +35,9 @@ esp_err_t espIna::_write_reg(uint8_t reg_addr, uint16_t reg_value){
 
 esp_err_t espIna::set_calibration(float r_shunt_res_ohm, float max_current_a){
   esp_err_t ret_value = ESP_FAIL;
-  _current_lsb = max_current_a / (float)pow(2U, 15U);
+  _current_lsb = max_current_a / 32768.F;
   _power_lsb = 20 * _current_lsb;
-  uint16_t calibration_value = trunc(0.04096F / ( _current_lsb * r_shunt_res_ohm ));
+  uint16_t calibration_value = int(0.04096F / ( _current_lsb * r_shunt_res_ohm ));
 
   _write_reg(INA_CALIB_REG_ADDR, calibration_value);
 
@@ -49,14 +50,16 @@ esp_err_t espIna::adjust_current_offset(float meas_current_a) {
   esp_err_t ret_value = ESP_FAIL;
   uint16_t calibration_value = 0U;
   uint16_t adj_calibration_value = 0U;
-  uint16_t current_reg_value = 0U;
+  float current_reg_value = 0.F;
   
   ESP_ERROR_CHECK(_read_reg(INA_CALIB_REG_ADDR, &calibration_value));
-  ESP_ERROR_CHECK(_read_reg(INA_CURRENT_REG_ADDR, &current_reg_value));
+  get_bus_current(&current_reg_value);
 
-  adj_calibration_value = trunc(calibration_value * meas_current_a / current_reg_value);
+  adj_calibration_value = (uint16_t)((float)calibration_value * meas_current_a / current_reg_value);
 
   ESP_ERROR_CHECK(_write_reg(INA_CALIB_REG_ADDR, adj_calibration_value));
+
+  ESP_LOGI("INA219", "Change calibration value to %d", adj_calibration_value);
 
   ret_value = ESP_OK;
 
